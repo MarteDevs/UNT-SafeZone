@@ -1,0 +1,6 @@
+{
+  "name": "UNT SafeZone",
+  "description": "Plataforma interactiva de prevención de riesgos universitarios, visualización geoespacial 2D/3D y orientación ante emergencias para la Universidad Nacional de Trujillo.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
