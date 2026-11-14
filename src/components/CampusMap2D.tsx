@@ -5,9 +5,14 @@ import type {
   BaseMapStyle,
   CampusBuilding,
   CampusSectorFeature,
+  DynamicRouteResult,
   EvacuationRouteFeature,
+  FieldIncidentReport,
+  ImportedGeoJsonLayer,
   LatLngTuple,
   LayerFilter,
+  OsmBuildingFootprint,
+  OsmFootwayPath,
   RainScenario,
   SafeZoneFeature,
 } from '../types/gis';
@@ -16,6 +21,7 @@ import { UNT_CAMPUS_CENTER } from '../data/untCampusData';
 interface CampusMap2DProps {
   baseStyle: BaseMapStyle;
   onChangeBaseStyle: (style: BaseMapStyle) => void;
+  darkMode: boolean;
   buildings: CampusBuilding[];
   sectors: CampusSectorFeature[];
   safeZones: SafeZoneFeature[];
@@ -26,6 +32,12 @@ interface CampusMap2DProps {
   userLocation: { coords: LatLngTuple; accuracyMeters?: number } | null;
   focusTargetCoords?: LatLngTuple | null;
   highlightedRouteId?: string | null;
+  osmBuildings: OsmBuildingFootprint[];
+  osmFootways: OsmFootwayPath[];
+  showOsmGeometry: boolean;
+  dynamicRoute: DynamicRouteResult | null;
+  importedGeoJsonLayers: ImportedGeoJsonLayer[];
+  verifiedReports: FieldIncidentReport[];
   onSelectSector: (id: string) => void;
   onSelectSafeZone: (id: string) => void;
 }
@@ -50,6 +62,7 @@ function createSvgDivIcon(html: string, size = 32): L.DivIcon {
 export function CampusMap2D({
   baseStyle,
   onChangeBaseStyle,
+  darkMode,
   buildings,
   sectors,
   safeZones,
@@ -60,6 +73,12 @@ export function CampusMap2D({
   userLocation,
   focusTargetCoords,
   highlightedRouteId,
+  osmBuildings,
+  osmFootways,
+  showOsmGeometry,
+  dynamicRoute,
+  importedGeoJsonLayers,
+  verifiedReports,
   onSelectSector,
   onSelectSafeZone,
 }: CampusMap2DProps) {
@@ -93,7 +112,13 @@ export function CampusMap2D({
     overlayLayerGroupRef.current = overlays;
     userLayerGroupRef.current = userGroup;
 
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false });
+    });
+    resizeObserver.observe(container);
+
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
       tileLayerRef.current = null;
@@ -102,7 +127,7 @@ export function CampusMap2D({
     };
   }, []);
 
-  // Switch between OpenStreetMap cartographic & Satellite imagery
+  // Switch between OpenStreetMap cartographic, CartoDB Dark Matter, and Satellite imagery
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -120,14 +145,19 @@ export function CampusMap2D({
               attribution: 'Imágenes © Esri, Maxar · Referencia UNT SafeZone',
             },
           )
-        : L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap contributors · UNT SafeZone',
-          });
+        : darkMode
+          ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+              maxZoom: 19,
+              attribution: '© OpenStreetMap · © CARTO Dark Matter · UNT SafeZone',
+            })
+          : L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+              attribution: '© OpenStreetMap contributors · UNT SafeZone',
+            });
 
     layer.addTo(map);
     tileLayerRef.current = layer;
-  }, [baseStyle]);
+  }, [baseStyle, darkMode]);
 
   // Render GIS Polygons, Safe Zones, Buildings & Validated Evacuation Routes
   useEffect(() => {
@@ -260,6 +290,93 @@ export function CampusMap2D({
         marker.addTo(group);
       }
     }
+
+    // 5. Real OpenStreetMap Building Footprints & Footways (when loaded and enabled)
+    if (showOsmGeometry) {
+      for (const footway of osmFootways) {
+        L.polyline(footway.coordinates, {
+          color: '#64748B',
+          weight: 1.5,
+          opacity: 0.55,
+          dashArray: '3 4',
+        }).addTo(group);
+      }
+      for (const osmBld of osmBuildings) {
+        const poly = L.polygon(osmBld.polygon, {
+          color: '#1E3A5F',
+          weight: 1.2,
+          fillColor: '#334155',
+          fillOpacity: 0.16,
+        });
+        if (osmBld.name) {
+          poly.bindTooltip(
+            `<div style="font-weight:600;font-size:11px;">${osmBld.name}</div><div style="font-size:10px;color:#475569;">Huella real OpenStreetMap</div>`,
+            { sticky: true, direction: 'top' },
+          );
+        }
+        poly.addTo(group);
+      }
+    }
+
+    // 6. External Imported GeoJSON Layers (QGIS / CENEPRED)
+    for (const layerItem of importedGeoJsonLayers) {
+      if (!layerItem.visible) continue;
+      L.geoJSON(layerItem.collection as unknown as GeoJSON.GeoJsonObject, {
+        style: {
+          color: '#7C3AED',
+          weight: 2.2,
+          fillColor: '#8B5CF6',
+          fillOpacity: 0.25,
+        },
+        onEachFeature: (feature, leafletLayer) => {
+          const props = feature.properties ?? {};
+          const title = String(
+            props.nombre || props.name || props.NOMB || layerItem.fileName,
+          );
+          const extra = props.fuente || props.nivel || props.nota || 'Capa externa importada';
+          leafletLayer.bindPopup(
+            `<div><div style="font-weight:600;color:#5B21B6;">${title}</div><div style="font-size:11px;color:#475569;margin-top:2px;">${String(extra)}</div></div>`,
+          );
+        },
+      }).addTo(group);
+    }
+
+    // 7. Dynamic Dijkstra Suggested Safe Route (Algorithmic Prototype)
+    if (dynamicRoute && dynamicRoute.coordinates.length >= 2) {
+      const dynPoly = L.polyline(dynamicRoute.coordinates, {
+        color: '#0D9488',
+        weight: 5.5,
+        opacity: 0.95,
+        dashArray: '8 6',
+      });
+      dynPoly.bindPopup(
+        `<div>
+          <div style="font-weight:700;color:#0F766E;">Ruta algorítmica sugerida (Prototipo)</div>
+          <div style="font-size:12px;color:#0F172A;margin-top:3px;">${dynamicRoute.originLabel} → ${dynamicRoute.targetSafeZone.name}</div>
+          <div style="font-size:12px;color:#334155;margin-top:2px;"><strong>${dynamicRoute.distanceMeters} m</strong> · ~${dynamicRoute.estimatedMinutes} min a pie</div>
+          <div style="font-size:11px;color:#64748B;margin-top:4px;">${dynamicRoute.disclaimer}</div>
+        </div>`,
+      );
+      dynPoly.addTo(group);
+    }
+
+    // 8. Moderated & Verified Field Incident Reports
+    for (const rep of verifiedReports) {
+      const icon = createSvgDivIcon(
+        `<div style="width:24px;height:24px;border-radius:6px;background:#D97706;border:2px solid #FFFFFF;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">!</div>`,
+        24,
+      );
+      const marker = L.marker([rep.coords.lat, rep.coords.lng], { icon, zIndexOffset: 450 });
+      marker.bindPopup(
+        `<div>
+          <div style="font-weight:700;color:#B45309;">Reporte verificado (Prototipo)</div>
+          <div style="font-weight:600;font-size:12px;margin-top:2px;">${rep.title}</div>
+          <div style="font-size:12px;color:#334155;margin-top:2px;">${rep.description}</div>
+          <div style="font-size:11px;color:#64748B;margin-top:4px;">${rep.sectorName} · ${rep.createdAt}</div>
+        </div>`,
+      );
+      marker.addTo(group);
+    }
   }, [
     buildings,
     sectors,
@@ -269,6 +386,12 @@ export function CampusMap2D({
     activeFilter,
     selectedId,
     highlightedRouteId,
+    osmBuildings,
+    osmFootways,
+    showOsmGeometry,
+    importedGeoJsonLayers,
+    dynamicRoute,
+    verifiedReports,
   ]);
 
   // Render User Geolocation Marker
@@ -317,26 +440,26 @@ export function CampusMap2D({
     <div className="relative h-full w-full overflow-hidden">
       <div ref={mapContainerRef} className="h-full w-full" />
 
-      {/* Base layer switch: Cartográfico OSM vs Satelital */}
-      <div className="absolute top-3 left-3 z-[400] flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm">
+      {/* Base layer switch: Cartográfico OSM / Nocturno vs Satelital */}
+      <div className="absolute top-3 left-3 z-[400] flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/95">
         <button
           type="button"
           onClick={() => onChangeBaseStyle('carto')}
           className={`min-h-[34px] whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
             baseStyle === 'carto'
-              ? 'bg-[#0F2942] text-white'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              ? 'bg-[#0F2942] text-white dark:bg-sky-600'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
           }`}
         >
-          Cartográfico (OSM)
+          {darkMode ? 'Cartográfico Oscuro' : 'Cartográfico (OSM)'}
         </button>
         <button
           type="button"
           onClick={() => onChangeBaseStyle('satelital')}
           className={`min-h-[34px] whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
             baseStyle === 'satelital'
-              ? 'bg-[#0F2942] text-white'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              ? 'bg-[#0F2942] text-white dark:bg-sky-600'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
           }`}
         >
           Vista Satelital
@@ -345,12 +468,12 @@ export function CampusMap2D({
 
       {/* Custom Zoom & Recenter Controls */}
       <div className="absolute top-3 right-3 z-[400] flex flex-col gap-1.5">
-        <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/95 shadow-sm">
+        <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/95 shadow-sm dark:border-slate-700 dark:bg-slate-900/95">
           <button
             type="button"
             onClick={handleZoomIn}
             aria-label="Acercar mapa"
-            className="flex h-10 w-10 items-center justify-center border-b border-slate-200 text-slate-700 hover:bg-slate-50"
+            className="flex h-10 w-10 items-center justify-center border-b border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -358,7 +481,7 @@ export function CampusMap2D({
             type="button"
             onClick={handleZoomOut}
             aria-label="Alejar mapa"
-            className="flex h-10 w-10 items-center justify-center border-b border-slate-200 text-slate-700 hover:bg-slate-50"
+            className="flex h-10 w-10 items-center justify-center border-b border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <Minus className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -367,7 +490,7 @@ export function CampusMap2D({
             onClick={handleResetView}
             aria-label="Centrar en Ciudad Universitaria UNT"
             title="Centrar en campus UNT"
-            className="flex h-10 w-10 items-center justify-center text-slate-700 hover:bg-slate-50"
+            className="flex h-10 w-10 items-center justify-center text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -383,7 +506,7 @@ export function CampusMap2D({
             }
             aria-label="Centrar en mi ubicación"
             title="Ir a mi ubicación"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-blue-200 bg-white/95 text-blue-600 shadow-sm hover:bg-blue-50"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-blue-200 bg-white/95 text-blue-600 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900/95 dark:text-sky-400 dark:hover:bg-slate-800"
           >
             <LocateFixed className="h-4 w-4" aria-hidden="true" />
           </button>

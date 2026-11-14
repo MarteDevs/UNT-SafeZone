@@ -17,12 +17,12 @@ export function Header({ onJumpToMap }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
+    <header className="no-print sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-8 px-4 py-3 sm:px-6 lg:px-8">
         {/* Zone 1: Single-line Brand Wordmark */}
         <a
           href="#inicio"
-          className="inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap text-lg font-bold tracking-tight text-[#0F2942]"
+          className="inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap text-lg font-bold tracking-tight text-[#0F2942] dark:text-white"
         >
           <svg
             width="28"
@@ -47,13 +47,13 @@ export function Header({ onJumpToMap }: HeaderProps) {
         {/* Zone 2: 5 concise single-line navigation links */}
         <nav
           aria-label="Navegación principal"
-          className="hidden items-center gap-6 text-sm font-medium text-slate-600 lg:flex"
+          className="hidden items-center gap-6 text-sm font-medium text-slate-600 lg:flex dark:text-slate-300"
         >
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className="shrink-0 whitespace-nowrap py-1 transition-colors hover:text-[#0F2942] hover:underline hover:underline-offset-4"
+              className="shrink-0 whitespace-nowrap py-1 transition-colors hover:text-[#0F2942] hover:underline hover:underline-offset-4 dark:hover:text-white"
             >
               {link.label}
             </a>
@@ -65,7 +65,7 @@ export function Header({ onJumpToMap }: HeaderProps) {
           <button
             type="button"
             onClick={onJumpToMap}
-            className="hidden min-h-[40px] shrink-0 whitespace-nowrap rounded-lg bg-[#0F2942] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1E3A5F] sm:inline-flex sm:items-center"
+            className="hidden min-h-[40px] shrink-0 whitespace-nowrap rounded-lg bg-[#0F2942] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1E3A5F] sm:inline-flex sm:items-center dark:bg-sky-600 dark:hover:bg-sky-700"
           >
             Ver mapa de riesgos
           </button>
@@ -75,7 +75,7 @@ export function Header({ onJumpToMap }: HeaderProps) {
             onClick={() => setMobileMenuOpen((v) => !v)}
             aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
             aria-expanded={mobileMenuOpen}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 lg:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 lg:hidden dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             {mobileMenuOpen ? (
               <X className="h-5 w-5" aria-hidden="true" />
@@ -88,14 +88,14 @@ export function Header({ onJumpToMap }: HeaderProps) {
 
       {/* Responsive mobile drawer */}
       {mobileMenuOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-3 lg:hidden">
+        <div className="border-t border-slate-200 bg-white px-4 py-3 lg:hidden dark:border-slate-800 dark:bg-slate-900">
           <nav className="flex flex-col gap-1">
             {NAV_LINKS.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0F2942]"
+                className="flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0F2942] dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
               >
                 {link.label}
               </a>

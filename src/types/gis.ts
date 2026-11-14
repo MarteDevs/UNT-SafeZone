@@ -173,3 +173,73 @@ export interface EmergencyContact {
   phone: string;
   note: string;
 }
+
+export interface OsmBuildingFootprint {
+  id: string;
+  name?: string;
+  buildingType?: string;
+  polygon: [number, number][];
+}
+
+export interface OsmFootwayPath {
+  id: string;
+  coordinates: [number, number][];
+}
+
+export interface DynamicRouteResult {
+  originLabel: string;
+  targetSafeZone: SafeZoneFeature;
+  coordinates: [number, number][];
+  waypoints: string[];
+  distanceMeters: number;
+  estimatedMinutes: number;
+  avoidedRiskSectors: string[];
+  isAlgorithmicPrototype: true;
+  disclaimer: string;
+}
+
+export interface GeoJsonFeatureLike {
+  type: 'Feature';
+  id?: string | number;
+  properties?: Record<string, unknown> | null;
+  geometry: {
+    type: string;
+    coordinates: unknown;
+  } | null;
+}
+
+export interface GeoJsonFeatureCollectionLike {
+  type: 'FeatureCollection';
+  name?: string;
+  features: GeoJsonFeatureLike[];
+}
+
+export interface ImportedGeoJsonLayer {
+  id: string;
+  fileName: string;
+  loadedAt: string;
+  featureCount: number;
+  visible: boolean;
+  collection: GeoJsonFeatureCollectionLike;
+}
+
+export type FieldIncidentKind =
+  | 'acumulacion'
+  | 'sumidero_tapado'
+  | 'pasadizo_resbaladizo'
+  | 'acceso_bloqueado';
+
+export type ModerationStatus = 'pendiente' | 'verificado' | 'descartado';
+
+export interface FieldIncidentReport {
+  id: string;
+  kind: FieldIncidentKind;
+  title: string;
+  description: string;
+  coords: LatLngTuple;
+  sectorName: string;
+  createdAt: string;
+  moderationStatus: ModerationStatus;
+  reporterRole: string;
+}
+

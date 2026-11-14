@@ -1,0 +1,279 @@
+{
+  "entities": {
+    "CampusStatus": {
+      "title": "CampusStatus",
+      "description": "Estado operativo global de emergencia y alerta SENAMHI en la Ciudad Universitaria UNT.",
+      "type": "object",
+      "properties": {
+        "alertLevel": {
+          "type": "string",
+          "enum": ["blanco", "amarillo", "naranja", "rojo"],
+          "maxLength": 16,
+          "description": "Nivel oficial declarado por el operador o defensa civil universitaria."
+        },
+        "remoteClassesActive": {
+          "type": "boolean",
+          "description": "Indica si la continuidad académica pasó a modalidad remota."
+        },
+        "activeScenario": {
+          "type": "string",
+          "enum": ["normal", "intensa", "elnino"],
+          "maxLength": 16,
+          "description": "Escenario hídrico vinculado al visor de riesgos."
+        },
+        "meetingPointName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120,
+          "description": "Nombre del punto de encuentro principal sugerido."
+        },
+        "advisoryTitle": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Directiva principal mostrada en la pantalla táctica 01."
+        },
+        "advisoryMessage": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 280,
+          "description": "Instrucción operativa corta para estudiantes y docentes."
+        },
+        "updatedByLabel": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80,
+          "description": "Unidad institucional que publicó el último cambio."
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Habilita lectura pública sin exponer datos personales."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Marca temporal del servidor."
+        }
+      },
+      "required": [
+        "alertLevel",
+        "remoteClassesActive",
+        "activeScenario",
+        "meetingPointName",
+        "advisoryTitle",
+        "advisoryMessage",
+        "updatedByLabel",
+        "isPublic",
+        "updatedAt"
+      ]
+    },
+    "ZoneStatus": {
+      "title": "ZoneStatus",
+      "description": "Estado operativo por zona o pasadizo dentro del campus universitario.",
+      "type": "object",
+      "properties": {
+        "zoneId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 64
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "status": {
+          "type": "string",
+          "enum": ["desalojado", "bloqueado", "punto_encuentro", "en_vigilancia", "habilitado"],
+          "maxLength": 32
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["blanco", "amarillo", "naranja", "rojo"],
+          "maxLength": 16
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["zoneId", "name", "status", "severity", "note", "isPublic", "updatedAt"]
+    },
+    "IncidentLog": {
+      "title": "IncidentLog",
+      "description": "Bitácora cronológica inmutable de eventos declarados desde el Panel del Operador.",
+      "type": "object",
+      "properties": {
+        "logId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 64
+        },
+        "timeLabel": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 12
+        },
+        "message": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "alertLevel": {
+          "type": "string",
+          "enum": ["blanco", "amarillo", "naranja", "rojo"],
+          "maxLength": 16
+        },
+        "authorUid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["logId", "timeLabel", "message", "alertLevel", "authorUid", "isPublic", "createdAt"]
+    },
+    "FieldReport": {
+      "title": "FieldReport",
+      "description": "Reporte ciudadano de campo en campus sujeto a moderación.",
+      "type": "object",
+      "properties": {
+        "reportId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 64
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["acumulacion", "sumidero_tapado", "pasadizo_resbaladizo", "acceso_bloqueado"],
+          "maxLength": 32
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 400
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lng": {
+          "type": "number"
+        },
+        "sectorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "timeLabel": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 12
+        },
+        "moderationStatus": {
+          "type": "string",
+          "enum": ["pendiente", "verificado", "descartado"],
+          "maxLength": 20
+        },
+        "reporterRole": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "authorUid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "reportId",
+        "kind",
+        "title",
+        "description",
+        "lat",
+        "lng",
+        "sectorName",
+        "timeLabel",
+        "moderationStatus",
+        "reporterRole",
+        "authorUid",
+        "isPublic",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Registro de operador autorizado sin PII.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "role": {
+          "type": "string",
+          "enum": ["operador", "supervisor"],
+          "maxLength": 24
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/campus_status/{statusId}": {
+      "schema": { "$ref": "#/entities/CampusStatus" },
+      "description": "Estado global activo de alerta SENAMHI y continuidad académica."
+    },
+    "/zone_statuses/{zoneId}": {
+      "schema": { "$ref": "#/entities/ZoneStatus" },
+      "description": "Estado operativo por zona o pasadizo del campus UNT."
+    },
+    "/incident_logs/{logId}": {
+      "schema": { "$ref": "#/entities/IncidentLog" },
+      "description": "Bitácora cronológica oficial de acciones del operador."
+    },
+    "/field_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/FieldReport" },
+      "description": "Reportes de campo con flujo de moderación."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Operadores autorizados para el panel de comando."
+    }
+  }
+}

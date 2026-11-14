@@ -1,0 +1,299 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedEmail() && (
+        request.auth.token.email == 'soumartex@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidAlertLevel(val) {
+      return val is string && val.size() <= 16 && val in ['blanco', 'amarillo', 'naranja', 'rojo'];
+    }
+
+    function isValidScenario(val) {
+      return val is string && val.size() <= 16 && val in ['normal', 'intensa', 'elnino'];
+    }
+
+    function isValidZoneStatusCode(val) {
+      return val is string && val.size() <= 32 && val in ['desalojado', 'bloqueado', 'punto_encuentro', 'en_vigilancia', 'habilitado'];
+    }
+
+    function isValidReportKind(val) {
+      return val is string && val.size() <= 32 && val in ['acumulacion', 'sumidero_tapado', 'pasadizo_resbaladizo', 'acceso_bloqueado'];
+    }
+
+    function isValidModerationStatus(val) {
+      return val is string && val.size() <= 20 && val in ['pendiente', 'verificado', 'descartado'];
+    }
+
+    function isValidCampusStatus(data) {
+      return data.keys().hasAll([
+        'alertLevel',
+        'remoteClassesActive',
+        'activeScenario',
+        'meetingPointName',
+        'advisoryTitle',
+        'advisoryMessage',
+        'updatedByLabel',
+        'isPublic',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'alertLevel',
+        'remoteClassesActive',
+        'activeScenario',
+        'meetingPointName',
+        'advisoryTitle',
+        'advisoryMessage',
+        'updatedByLabel',
+        'isPublic',
+        'updatedAt'
+      ]) &&
+      isValidAlertLevel(data.alertLevel) &&
+      data.remoteClassesActive is bool &&
+      isValidScenario(data.activeScenario) &&
+      data.meetingPointName is string && data.meetingPointName.size() >= 2 && data.meetingPointName.size() <= 120 &&
+      data.advisoryTitle is string && data.advisoryTitle.size() >= 2 && data.advisoryTitle.size() <= 100 &&
+      data.advisoryMessage is string && data.advisoryMessage.size() >= 4 && data.advisoryMessage.size() <= 280 &&
+      data.updatedByLabel is string && data.updatedByLabel.size() >= 2 && data.updatedByLabel.size() <= 80 &&
+      data.isPublic is bool &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidZoneStatus(data) {
+      return data.keys().hasAll([
+        'zoneId',
+        'name',
+        'status',
+        'severity',
+        'note',
+        'isPublic',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'zoneId',
+        'name',
+        'status',
+        'severity',
+        'note',
+        'isPublic',
+        'updatedAt'
+      ]) &&
+      isValidId(data.zoneId) &&
+      data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+      isValidZoneStatusCode(data.status) &&
+      isValidAlertLevel(data.severity) &&
+      data.note is string && data.note.size() <= 240 &&
+      data.isPublic is bool &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidIncidentLog(data) {
+      return data.keys().hasAll([
+        'logId',
+        'timeLabel',
+        'message',
+        'alertLevel',
+        'authorUid',
+        'isPublic',
+        'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'logId',
+        'timeLabel',
+        'message',
+        'alertLevel',
+        'authorUid',
+        'isPublic',
+        'createdAt'
+      ]) &&
+      isValidId(data.logId) &&
+      data.timeLabel is string && data.timeLabel.size() >= 4 && data.timeLabel.size() <= 12 &&
+      data.message is string && data.message.size() >= 3 && data.message.size() <= 200 &&
+      isValidAlertLevel(data.alertLevel) &&
+      isValidId(data.authorUid) &&
+      data.isPublic is bool &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidFieldReport(data) {
+      return data.keys().hasAll([
+        'reportId',
+        'kind',
+        'title',
+        'description',
+        'lat',
+        'lng',
+        'sectorName',
+        'timeLabel',
+        'moderationStatus',
+        'reporterRole',
+        'authorUid',
+        'isPublic',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'reportId',
+        'kind',
+        'title',
+        'description',
+        'lat',
+        'lng',
+        'sectorName',
+        'timeLabel',
+        'moderationStatus',
+        'reporterRole',
+        'authorUid',
+        'isPublic',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      isValidId(data.reportId) &&
+      isValidReportKind(data.kind) &&
+      data.title is string && data.title.size() >= 3 && data.title.size() <= 100 &&
+      data.description is string && data.description.size() >= 5 && data.description.size() <= 400 &&
+      data.lat is number && data.lat >= -9.0 && data.lat <= -7.0 &&
+      data.lng is number && data.lng >= -80.0 && data.lng <= -78.0 &&
+      data.sectorName is string && data.sectorName.size() >= 2 && data.sectorName.size() <= 120 &&
+      data.timeLabel is string && data.timeLabel.size() >= 4 && data.timeLabel.size() <= 12 &&
+      isValidModerationStatus(data.moderationStatus) &&
+      data.reporterRole is string && data.reporterRole.size() >= 2 && data.reporterRole.size() <= 80 &&
+      isValidId(data.authorUid) &&
+      data.isPublic is bool &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    match /campus_status/{statusId} {
+      allow get: if isValidId(statusId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isAdmin() &&
+        isValidId(statusId) &&
+        isValidCampusStatus(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() &&
+        isValidId(statusId) &&
+        isValidCampusStatus(incoming()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'alertLevel',
+          'remoteClassesActive',
+          'activeScenario',
+          'meetingPointName',
+          'advisoryTitle',
+          'advisoryMessage',
+          'updatedByLabel',
+          'isPublic',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /zone_statuses/{zoneId} {
+      allow get: if isValidId(zoneId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isAdmin() &&
+        isValidId(zoneId) &&
+        isValidZoneStatus(incoming()) &&
+        incoming().zoneId == zoneId &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() &&
+        isValidId(zoneId) &&
+        isValidZoneStatus(incoming()) &&
+        incoming().zoneId == existing().zoneId &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name',
+          'status',
+          'severity',
+          'note',
+          'isPublic',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /incident_logs/{logId} {
+      allow get: if isValidId(logId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isAdmin() &&
+        isValidId(logId) &&
+        isValidIncidentLog(incoming()) &&
+        incoming().logId == logId &&
+        incoming().authorUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /field_reports/{reportId} {
+      allow get: if isValidId(reportId) && (
+        resource == null ||
+        existing().isPublic == true ||
+        (isSignedIn() && existing().authorUid == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if existing().isPublic == true ||
+        (isSignedIn() && existing().authorUid == request.auth.uid) ||
+        isAdmin();
+      allow create: if isVerifiedEmail() &&
+        isValidId(reportId) &&
+        isValidFieldReport(incoming()) &&
+        incoming().reportId == reportId &&
+        incoming().authorUid == request.auth.uid &&
+        incoming().moderationStatus == 'pendiente' &&
+        incoming().isPublic == false &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() &&
+        isValidId(reportId) &&
+        isValidFieldReport(incoming()) &&
+        incoming().reportId == existing().reportId &&
+        incoming().authorUid == existing().authorUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'moderationStatus',
+          'isPublic',
+          'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(reportId);
+    }
+
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+  }
+}

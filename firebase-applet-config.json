@@ -1,0 +1,12 @@
+{
+  "projectId": "expedientecheck-prod",
+  "appId": "1:545578091392:web:ea685c83717e65751b3765",
+  "apiKey": "AIzaSyBlzUnRn9x2HLyc3MZwHqnZDt3LsmKFs8I",
+  "authDomain": "expedientecheck-prod-51916.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-untsafezone-c28da0eb-e3f6-4341-9081-2b389128878a",
+  "storageBucket": "expedientecheck-prod.firebasestorage.app",
+  "messagingSenderId": "545578091392",
+  "measurementId": "",
+  "oAuthClientId": "545578091392-e8umvdoakrh6tpdiem9saif4176ogglu.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+}

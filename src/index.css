@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
@@ -33,6 +34,10 @@
   z-index: 1;
 }
 
+.dark .leaflet-container {
+  background: #0f172a;
+}
+
 .leaflet-popup-content-wrapper {
   border-radius: 10px;
   border: 1px solid #e2e8f0;
@@ -55,5 +60,28 @@
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-sheet {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
   }
 }

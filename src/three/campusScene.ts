@@ -18,6 +18,13 @@ const _dummy = new THREE.Object3D();
 
 export type CameraPresetKey = 'general' | 'sur' | 'seguras' | 'aerea';
 
+export interface ProjectedLabel3D {
+  id: string;
+  x: number;
+  y: number;
+  visible: boolean;
+}
+
 export interface Campus3DConfig {
   buildings: CampusBuilding[];
   sectors: CampusSectorFeature[];
@@ -26,6 +33,7 @@ export interface Campus3DConfig {
   onSelectSector: (sectorId: string) => void;
   onSelectSafeZone: (zoneId: string) => void;
   onHoverLabel: (label: string | null) => void;
+  onProjectLabels?: (items: ProjectedLabel3D[]) => void;
 }
 
 export interface Campus3DHandle {
@@ -33,6 +41,9 @@ export interface Campus3DHandle {
     rainScenario: RainScenario;
     activeFilter: LayerFilter;
     selectedId: string | null;
+    dynamicRouteCoords?: [number, number][] | null;
+    nightMode?: boolean;
+    labelsEnabled?: boolean;
   }) => void;
   setCameraPreset: (preset: CameraPresetKey) => void;
   focusPoint: (x: number, z: number) => void;
@@ -490,6 +501,7 @@ function buildGateGroup(
 function buildSafeMarkerGroup(zone: SafeZoneFeature): {
   group: THREE.Group;
   ring: THREE.Mesh;
+  beaconMat: THREE.MeshStandardMaterial;
 } {
   const isSafe = zone.type === 'zona_segura';
   const colorHex = !zone.isEnabled ? 0x64748b : isSafe ? 0x16a34a : 0x2563eb;
@@ -542,7 +554,7 @@ function buildSafeMarkerGroup(zone: SafeZoneFeature): {
   core.position.y = 7.8;
   group.add(core);
 
-  return { group, ring };
+  return { group, ring, beaconMat };
 }
 
 export function createCampus3DScene(
@@ -850,6 +862,7 @@ export function createCampus3DScene(
     zone: SafeZoneFeature;
     group: THREE.Group;
     ring: THREE.Mesh;
+    beaconMat: THREE.MeshStandardMaterial;
   }[] = [];
 
   for (const zone of config.safeZones) {
@@ -867,6 +880,35 @@ export function createCampus3DScene(
     scene.add(proxy);
     clickableProxies.push(proxy);
   }
+
+  // Pre-allocated anchor & projected output list for floating 3D labels (Zero GC)
+  const labelAnchors: {
+    id: string;
+    x: number;
+    y: number;
+    z: number;
+    safeZoneType?: SafeZoneFeature['type'];
+  }[] = [
+    ...config.buildings.map((b) => ({
+      id: b.id,
+      x: b.local3D.x,
+      y: b.local3D.height + 2.6,
+      z: b.local3D.z,
+    })),
+    ...config.safeZones.map((z) => ({
+      id: z.id,
+      x: z.local3D.x,
+      y: 10.6,
+      z: z.local3D.z,
+      safeZoneType: z.type,
+    })),
+  ];
+  const projectedLabels: ProjectedLabel3D[] = labelAnchors.map((a) => ({
+    id: a.id,
+    x: 0,
+    y: 0,
+    visible: false,
+  }));
 
   // Validated Evacuation Routes (3D TubeGeometry ribbons)
   const routeMeshes: THREE.Mesh[] = [];
@@ -890,6 +932,34 @@ export function createCampus3DScene(
     scene.add(tube);
     routeMeshes.push(tube);
   }
+
+  // Dynamic Dijkstra Route Tube (created/replaced on demand)
+  let dynamicRouteMesh: THREE.Mesh | null = null;
+  const setDynamicRoute3D = (coords?: [number, number][] | null) => {
+    if (dynamicRouteMesh) {
+      scene.remove(dynamicRouteMesh);
+      dynamicRouteMesh.geometry.dispose();
+      (dynamicRouteMesh.material as THREE.Material).dispose();
+      dynamicRouteMesh = null;
+    }
+    if (!coords || coords.length < 2) return;
+    const pts = coords.map(([lat, lng]) => {
+      const [rx, rz] = latLngToLocal3D(lat, lng);
+      return new THREE.Vector3(rx, 0.72, rz);
+    });
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const tubeGeo = new THREE.TubeGeometry(curve, Math.max(24, pts.length * 10), 0.68, 8, false);
+    const tubeMat = new THREE.MeshStandardMaterial({
+      color: 0x0d9488,
+      emissive: 0x14b8a6,
+      emissiveIntensity: 0.65,
+      roughness: 0.25,
+      metalness: 0.25,
+    });
+    dynamicRouteMesh = new THREE.Mesh(tubeGeo, tubeMat);
+    dynamicRouteMesh.renderOrder = 5;
+    scene.add(dynamicRouteMesh);
+  };
 
   // Procedural Rain Particles (THREE.Points, pre-allocated Float32Array)
   const rainCount = 1200;
@@ -975,26 +1045,77 @@ export function createCampus3DScene(
   let currentScenario: RainScenario = 'normal';
   let currentFilter: LayerFilter = 'todos';
   let selectedFeatureId: string | null = null;
+  let isNightMode = false;
+  let areLabelsEnabled = true;
   let targetSkyHex = 0xdce8f2;
   let targetRainOpacity = 0.0;
   let rainFallSpeed = 28;
+  let viewportWidth = width;
+  let viewportHeight = height;
 
   const applyFilterAndScenario = () => {
     const scenarioCfg: Record<
       RainScenario,
-      { sky: number; rainOpacity: number; speed: number; wave: number; sunIntensity: number }
+      {
+        sky: number;
+        nightSky: number;
+        rainOpacity: number;
+        speed: number;
+        wave: number;
+        sunIntensity: number;
+        nightIntensity: number;
+      }
     > = {
-      normal: { sky: 0xdce8f2, rainOpacity: 0.0, speed: 26, wave: 0.02, sunIntensity: 1.85 },
-      intensa: { sky: 0xb6c7d6, rainOpacity: 0.55, speed: 48, wave: 0.06, sunIntensity: 1.25 },
-      elnino: { sky: 0x8ea3b8, rainOpacity: 0.88, speed: 70, wave: 0.11, sunIntensity: 0.95 },
+      normal: {
+        sky: 0xdce8f2,
+        nightSky: 0x0b1626,
+        rainOpacity: 0.0,
+        speed: 26,
+        wave: 0.02,
+        sunIntensity: 1.85,
+        nightIntensity: 0.72,
+      },
+      intensa: {
+        sky: 0xb6c7d6,
+        nightSky: 0x091320,
+        rainOpacity: 0.55,
+        speed: 48,
+        wave: 0.06,
+        sunIntensity: 1.25,
+        nightIntensity: 0.56,
+      },
+      elnino: {
+        sky: 0x8ea3b8,
+        nightSky: 0x070e18,
+        rainOpacity: 0.88,
+        speed: 70,
+        wave: 0.11,
+        sunIntensity: 0.95,
+        nightIntensity: 0.46,
+      },
     };
 
     const cfg = scenarioCfg[currentScenario];
-    targetSkyHex = cfg.sky;
+    targetSkyHex = isNightMode ? cfg.nightSky : cfg.sky;
     targetRainOpacity = cfg.rainOpacity;
     rainFallSpeed = cfg.speed;
     waterUniforms.uWaveAmp.value = cfg.wave;
-    sunLight.intensity = cfg.sunIntensity;
+
+    if (isNightMode) {
+      sunLight.color.setHex(0x93c5fd);
+      sunLight.intensity = cfg.nightIntensity;
+      hemiLight.intensity = 0.42;
+      rimLight.intensity = 0.65;
+      materials.emissiveLamp.emissiveIntensity = 2.4;
+      (outerGround.material as THREE.MeshStandardMaterial).color.setHex(0x1e293b);
+    } else {
+      sunLight.color.setHex(0xfff3e0);
+      sunLight.intensity = cfg.sunIntensity;
+      hemiLight.intensity = 0.72;
+      rimLight.intensity = 0.45;
+      materials.emissiveLamp.emissiveIntensity = 0.8;
+      (outerGround.material as THREE.MeshStandardMaterial).color.setHex(0xcbd5e1);
+    }
 
     const showRiskPolygons =
       currentFilter === 'todos' ||
@@ -1014,7 +1135,7 @@ export function createCampus3DScene(
       item.targetWaterY = visible && depth > 0.08 ? Math.min(1.65, depth * 1.15) : -0.35;
 
       const padMat = item.pad.material as THREE.MeshStandardMaterial;
-      padMat.opacity = selectedFeatureId === id ? 0.62 : 0.34;
+      padMat.opacity = selectedFeatureId === id ? 0.62 : isNightMode ? 0.44 : 0.34;
     }
 
     for (const beacon of safeBeacons) {
@@ -1024,11 +1145,18 @@ export function createCampus3DScene(
         (currentFilter === 'puntos_encuentro' && beacon.zone.type === 'punto_encuentro') ||
         currentFilter === 'rutas_evacuacion';
       beacon.group.visible = matchesSafe;
+      beacon.beaconMat.emissiveIntensity = isNightMode ? 1.45 : 0.55;
     }
 
     const showRoutes = currentFilter === 'todos' || currentFilter === 'rutas_evacuacion';
     for (const mesh of routeMeshes) {
       mesh.visible = showRoutes;
+      (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = isNightMode ? 1.25 : 0.45;
+    }
+    if (dynamicRouteMesh) {
+      (dynamicRouteMesh.material as THREE.MeshStandardMaterial).emissiveIntensity = isNightMode
+        ? 1.5
+        : 0.65;
     }
   };
 
@@ -1042,6 +1170,8 @@ export function createCampus3DScene(
   const handleResize = () => {
     const w = Math.max(container.clientWidth, 320);
     const h = Math.max(container.clientHeight, 320);
+    viewportWidth = w;
+    viewportHeight = h;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
@@ -1138,6 +1268,38 @@ export function createCampus3DScene(
     controls.update();
     renderer.render(scene, camera);
 
+    if (areLabelsEnabled && config.onProjectLabels) {
+      for (let i = 0; i < labelAnchors.length; i++) {
+        const anchor = labelAnchors[i];
+        const out = projectedLabels[i];
+
+        if (anchor.safeZoneType) {
+          const matchesSafe =
+            currentFilter === 'todos' ||
+            (currentFilter === 'zonas_seguras' && anchor.safeZoneType === 'zona_segura') ||
+            (currentFilter === 'puntos_encuentro' && anchor.safeZoneType === 'punto_encuentro') ||
+            currentFilter === 'rutas_evacuacion';
+          if (!matchesSafe) {
+            out.visible = false;
+            continue;
+          }
+        }
+
+        _vec3A.set(anchor.x, anchor.y, anchor.z);
+        _vec3A.project(camera);
+
+        const inFront = _vec3A.z > -1 && _vec3A.z < 1;
+        const sx = (_vec3A.x * 0.5 + 0.5) * viewportWidth;
+        const sy = (-_vec3A.y * 0.5 + 0.5) * viewportHeight;
+        const inBounds = sx >= 28 && sx <= viewportWidth - 28 && sy >= 36 && sy <= viewportHeight - 64;
+
+        out.x = sx;
+        out.y = sy;
+        out.visible = inFront && inBounds;
+      }
+      config.onProjectLabels(projectedLabels);
+    }
+
     if (isSoftwareGl) afterDraw(tick);
     else frameId = requestAnimationFrame(tick);
   }
@@ -1145,10 +1307,22 @@ export function createCampus3DScene(
   tick();
 
   return {
-    updateState({ rainScenario, activeFilter, selectedId }) {
+    updateState({
+      rainScenario,
+      activeFilter,
+      selectedId,
+      dynamicRouteCoords,
+      nightMode,
+      labelsEnabled,
+    }) {
       currentScenario = rainScenario;
       currentFilter = activeFilter;
       selectedFeatureId = selectedId;
+      if (nightMode !== undefined) isNightMode = nightMode;
+      if (labelsEnabled !== undefined) areLabelsEnabled = labelsEnabled;
+      if (dynamicRouteCoords !== undefined) {
+        setDynamicRoute3D(dynamicRouteCoords);
+      }
       applyFilterAndScenario();
     },
     setCameraPreset(preset) {
